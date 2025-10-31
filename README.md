@@ -25,6 +25,7 @@ See requirements.txt for dependencies
 ---
 
 ## Project structure
+```text
 .
 ├── Home.py
 ├── pages/
@@ -35,10 +36,10 @@ See requirements.txt for dependencies
 ├── requirements.txt
 └── README.md
 
-----
+---
 
 ## Live App
-To launch on streamlit cloud, please click the link below
+To launch on streamlit cloud, please click the following link
 [Launch on Streamlit Cloud](https://amy-data-profiler.streamlit.app/)
 
 ---
@@ -54,11 +55,11 @@ To launch on streamlit cloud, please click the link below
 ---
 
 ## Licence
-This project is licensed under the MIT License – see the [LICENSE](./LICENSE) file for details.
+This project is licensed under the MIT License – see the [LICENSE](./LICENSE.txt) file for details.
 
 ---
 
 ## Acknowledgements
 This project was developed as part of my MSc Data Science dissertation at Newcastle University, United Kingdom.  
-I would like to thank my supervisor Dr Sara Johansson Fernstad for their guidance, and the testers who provided feedback during user evaluation.
+I would like to thank my supervisor Dr Sara Johansson Fernstad for her guidance, and the testers who provided feedback during user evaluation.
 
