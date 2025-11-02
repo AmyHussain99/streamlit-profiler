@@ -1,10 +1,10 @@
-# ---------------- Home.py ----------------
+# Home.py 
 # Import relevant libraries
 import streamlit as st
 import pandas as pd
 import io, csv, re
 
-# Page config & title 
+# Page configuration & title 
 st.set_page_config(page_title="Data Profiling Tool", layout="wide")
 st.title("Data Profiling Tool")
 
@@ -18,7 +18,7 @@ Use the **menu on the left** to switch between checks.
 """
 )
 
-# Helpers 
+# CSV read function for uploader
 def read_csv_safely(file):
     """Read CSV with delimiter sniffing, BOM handling, and header cleanup."""
     raw = file.read()
@@ -50,16 +50,16 @@ def read_csv_safely(file):
     # drop junk columns
     before_cols = df.shape[1]
     df = df.loc[:, ~df.columns.str.match(r"^Unnamed(:\s*\d+)?$", flags=re.I)]
-    df = df.dropna(axis=1, how="all")
-    df = df.loc[:, df.columns.notna()]
-    dropped_cols = before_cols - df.shape[1]
+    df = df.dropna(axis=1, how="all") # Remove completely empty columns
+    df = df.loc[:, df.columns.notna()] # Removes columns with missing names
+    dropped_cols = before_cols - df.shape[1] # Count how many columns dropped
 
     return df, dropped_cols
 
 def to_numeric_resilient(series: pd.Series, pct_to_unit: bool = True) -> pd.Series:
-    """Parse numbers robustly: handle %, currency symbols, commas; keep NaNs."""
+    """Parse numbers robustly: standardise by handling %, currency symbols, commas; keep NaNs."""
     s = series.astype(str).str.strip()
-    s = s.replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+    s = s.replace({"": pd.NA, "nan": pd.NA, "None": pd.NA}) # Turn into NaN
 
     pct_mask = s.str.endswith("%", na=False)
     s_clean = (
@@ -69,12 +69,12 @@ def to_numeric_resilient(series: pd.Series, pct_to_unit: bool = True) -> pd.Seri
     num = pd.to_numeric(s_clean, errors="coerce")
 
     if pct_to_unit:
-        num.loc[pct_mask] = num.loc[pct_mask] / 100.0
+        num.loc[pct_mask] = num.loc[pct_mask] / 100.0 # Turn % values into decimals
 
     return num
 
 def looks_categorical(series: pd.Series, n_rows: int) -> bool:
-    """Heuristic to decide if a text column is a Category."""
+    """Function to decide if a text column is a Category."""
     s = series.dropna().astype(str).str.strip()
     if n_rows == 0 or len(s) == 0:
         return False
@@ -83,20 +83,20 @@ def looks_categorical(series: pd.Series, n_rows: int) -> bool:
 
     # reject IDs / near-unique
     if (uniq / n_rows) > 0.5:
-        return False
+        return False # Reject if too many uniques
     if s.str.match(r"^[A-Za-z0-9_-]{6,}$").mean() > 0.3:
-        return False
+        return False # Reject if too many alphanumeric tokens
 
     # positive signals
-    short_labels = (s.str.len().median() <= 25)
-    abs_low = uniq <= 50
-    rel_low = (uniq / max(n_rows, 1)) <= 0.2
-    coverage = s.value_counts(normalize=True).head(10).sum() >= 0.8
+    short_labels = (s.str.len().median() <= 25) # median label length <25 chrctrs
+    abs_low = uniq <= 50 # absolute values less than 50
+    rel_low = (uniq / max(n_rows, 1)) <= 0.2 # relative uniques less than 20% of rows
+    coverage = s.value_counts(normalize=True).head(10).sum() >= 0.8 # top 10 values cover 80% of rows
 
     positive = sum([short_labels, abs_low, rel_low, coverage])
-    return positive >= 3  # need at least 3 signals
+    return positive >= 3  # need at least 3 postivie signals
 
-def friendly_dtype_name(dtype_str: str) -> str:
+def friendly_dtype_name(dtype_str: str) -> str: # User-friendly names for pandas dtypes
     mapping = {
         "object": "Text",
         "string": "Text",
@@ -119,9 +119,9 @@ DTYPE_EXPLAINER = {
     "Date/Time": "Dates and times (e.g., 2020-12-31)."
 }
 
-# ---------- Persist dataset across pages ----------
+# Persist dataset across pages so does not disappear during rerun
 if "df" not in st.session_state:
-    st.session_state["df"] = None
+    st.session_state["df"] = None # if df not in memory then sets to None, otherwise skip and keep
 if "dropped_cols" not in st.session_state:
     st.session_state["dropped_cols"] = 0
 if "filename" not in st.session_state:
@@ -129,7 +129,7 @@ if "filename" not in st.session_state:
 if "file_bytes" not in st.session_state:
     st.session_state["file_bytes"] = None
 
-# ---------- Uploader ----------
+# CSV Uploader  
 uploaded_file = st.file_uploader("Upload a CSV", type=["csv"], key="uploader")
 st.caption("Note: Refresh webpage to clear CSV upload")
 
@@ -143,7 +143,7 @@ if uploaded_file is not None:
     st.session_state["df"] = df_new
     st.session_state["dropped_cols"] = dropped_cols_new
 
-# ---------- Main content ----------
+# Main content 
 if st.session_state["df"] is None:
     st.info("Upload a CSV to enable the pages.")
 else:
@@ -165,28 +165,28 @@ else:
     if dropped_cols:
         st.caption(f"Parsed with delimiter detection. Dropped {dropped_cols} empty/unnamed columns.")
 
-    # ---- Auto type conversions (after cleaning) ----
-    conversions = []
+    # Auto type conversions (after cleaning)
+    conversions = [] # store log of any type changes
     for col in df.columns:
         s = df[col]
 
         # 1) Date/Time
         if s.dtype == "object":
             parsed = pd.to_datetime(s, errors="coerce", infer_datetime_format=True)
-            if parsed.notna().mean() >= 0.6:  # tolerant threshold
+            if parsed.notna().mean() >= 0.6:  # if over 60% values become dates, convert whole column to datetime 
                 df[col] = parsed
-                conversions.append(f"{col} → datetime")
+                conversions.append(f"{col} → datetime") # log change
 
         # 2) True/False
         if df[col].dtype == "object":
-            vals = df[col].dropna().astype(str).str.strip().str.lower()
+            vals = df[col].dropna().astype(str).str.strip().str.lower() # normalise to lower case and strip spaces
             bool_map = {
                 "true": True, "false": False, "yes": True, "no": False,
                 "y": True, "n": False, "1": True, "0": False
             }
-            if len(vals) and vals.isin(bool_map.keys()).mean() >= 0.9:
+            if len(vals) and vals.isin(bool_map.keys()).mean() >= 0.9: # if over 90% values are boolean-type, map to booleans
                 df[col] = vals.map(bool_map).astype("boolean")
-                conversions.append(f"{col} → bool")
+                conversions.append(f"{col} → bool") # log change
 
         # 3) Numeric (robust: %, currency, commas) — evaluate only on non-blanks
         if df[col].dtype == "object":
@@ -206,28 +206,28 @@ else:
                     conversions.append(f"{col} → Int64")
                 else:
                     df[col] = num.astype("float64")
-                    conversions.append(f"{col} → float64")
+                    conversions.append(f"{col} → float64") # log change
 
 
         # 4) Category detection (after numeric/bool/date attempts)
         if df[col].dtype == "object":
             if looks_categorical(df[col], len(df)):
                 df[col] = df[col].astype("category")
-                conversions.append(f"{col} → category")
+                conversions.append(f"{col} → category") # log change
 
     # Save back for other pages
     st.session_state["df"] = df
     if conversions:
-        st.caption("Auto-conversions: " + ", ".join(conversions))
+        st.caption("Auto-conversions: " + ", ".join(conversions)) # note to list any dtype changes from log
 
-    # ---- Profiling summary ----
+    # Profiling summary
     st.subheader("Profiling summary")
     st.markdown(
         "This table shows each column’s **data type** (e.g., text, number, date), the **number of unique values**,"
         "the **number of missing values** and **numerical statistics for numerical values** to help spot issues quickly."
     )
     # Build summary with user-friendly names
-    dtype_friendly = df.dtypes.astype(str).map(friendly_dtype_name)
+    dtype_friendly = df.dtypes.astype(str).map(friendly_dtype_name) # convert pandas dtypes to user-friendly ones
     summary = pd.DataFrame({
         "Data Type": dtype_friendly,
         "Unique Values": df.nunique(dropna=True),
@@ -246,7 +246,7 @@ else:
         summary.loc[num_cols, "Min"]  = df[num_cols].min(numeric_only=True)
         summary.loc[num_cols, "Max"]  = df[num_cols].max(numeric_only=True)
 
-    st.markdown(summary.to_html(escape=False), unsafe_allow_html=True)
+    st.markdown(summary.to_html(escape=False), unsafe_allow_html=True) # render summary table with HTMl to allow tooltips
     st.caption(
         "Note 1: Columns with symbols (%, £, $, commas) are parsed as numbers where possible; "
         "blanks remain as missing values."
@@ -255,20 +255,15 @@ else:
                 "Note 2: A column is marked as Category when it mostly repeats a small set of short labels "
         "(e.g., Male/Female, UK/US) rather than having lots of unique codes or long text")
 
-# ---------- Global CSS (polish) ----------
+# --- Global CSS (polish) ---
 PRIMARY = "#2E86DE"
 st.markdown(f"""
 <style>
-h1, h2, h3 {{ color: #111111; }}
-.stButton>button {{
+h1, h2, h3 {{ color: #111111; }} # headings colour
+.stButton>button {{ # buttons style
   background:{PRIMARY}; color:white; border-radius:12px; border:0; padding:0.6rem 1rem;
 }}
 .stButton>button:hover {{ filter: brightness(0.92); }}
-.block-container {{ padding-top: 2rem; }}
+.block-container {{ padding-top: 2rem; }} # page top padding
 </style>
 """, unsafe_allow_html=True)
-
-# Run:
-# 1) cd c:\users\amy_t\streamlit-profiler
-# 2) py -m streamlit run Home.py
-# -----------------------------------------
