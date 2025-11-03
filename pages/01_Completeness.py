@@ -47,7 +47,7 @@ def _band(p):
     if p <= 50: return "High (20–50%)"
     return "Severe (>50%)"
 
-# --- Column-level missingness (Plotly bar only) ---
+# Column-level missingness (Plotly bar)
 st.subheader("Missingness by column")
 st.markdown(
     "This chart shows **how much data is missing in each column** as a percentage, so you can quickly spot the worst-affected columns."
@@ -78,7 +78,7 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# ---- Row completeness (clean, guided, CB-safe) ----
+# Row completeness
 st.subheader("Row completeness")
 st.markdown(
     "Shows how much of each row is **filled in** (100% = no blanks). "
@@ -92,7 +92,7 @@ OKI_BLUE   = "#0072B2"   # Present (neutral)
 row_complete = df.notna().mean(axis=1) * 100
 median_rc = float(row_complete.median())
 
-# --- Median card (stands out) ---
+# Median card (stands out)
 PRIMARY = "#56B4E9"  
 st.markdown(f"""
 <div class="metric-card">
@@ -120,39 +120,43 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- New line / section for the threshold ---
-st.markdown("**Completion threshold (%)**")
-st.caption("Show the number of rows below a chosen completeness level (e.g., 90% = rows with more than 10% blanks).")
+# New line / section for the threshold
+st.markdown("**Row completion threshold (%)**")
+st.caption("This will highlight the number of rows below a chosen completeness level "
+"(e.g., 90% will highlight rows with more than 10% of data blank).")
 
 thr = st.slider(
-    label="", min_value=50, max_value=100, value=90, step=1,
-    help="Rows with completeness below this percentage are considered incomplete."
+    label="", min_value=0, max_value=100, value=90, step=1,
+    help="Choose the minimum percentage of non-missing cells a row must have." 
+     "Rows below this level are considered incomplete."
 )
+
+missing_cutoff = 100 - thr
 below_mask = (row_complete < thr)
+
 st.metric("Rows below threshold", f"{int(below_mask.sum())} / {len(df)}")
-st.caption("Adjust the slider to see how many rows fall below your chosen level.")
+st.caption(f"Rows with less than **{thr}%** cells filled (i.e. more than **{missing_cutoff}%** cells missing) are flagged")
 
-
-# --- Row inspector (for flagged rows) ---
+ # --- Row inspector (for flagged rows) ---
 flagged_idx = row_complete[below_mask].sort_values().index
+flagged_n = len(flagged_idx)
 
-if len(flagged_idx) == 0:
+if flagged_n == 0:
     st.info("No rows fall below the threshold. Increase the threshold or check back after cleaning.")
 else:
-    # Instruction line
-    st.markdown("**Inspect a row** below the threshold to see which cells are present vs missing.")
+    st.markdown("**Inspect a row** below the threshold to see which cells are present vs missing.**")
 
-    # Legend box (right under the line)
+    # Legend
     legend_html = f"""
     <div style="margin-top:6px;margin-bottom:12px;">
       <div style="display:inline-flex;align-items:center;gap:14px;background:#F8F9FA;border:1px solid #ECECEC;border-radius:10px;padding:6px 12px;">
         <span style="font-weight:600;">Legend:</span>
         <span style="display:inline-flex;align-items:center;gap:6px;">
-          <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;">✓</span>
+          <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;'>✓</span>
           Present
         </span>
         <span style="display:inline-flex;align-items:center;gap:6px;">
-          <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;">✕</span>
+          <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>
           Missing
         </span>
       </div>
@@ -163,42 +167,44 @@ else:
     # Picker
     pick = st.selectbox("Choose a row to inspect", flagged_idx, index=0)
 
-# Build a one-row boolean mask (True = Missing, False = Present)
-status_bool = df.loc[pick].isna()
+    # Build a one-row boolean mask (True = Missing, False = Present)
+    status_bool = df.loc[pick].isna()
 
-# Convert to HTML badges so Streamlit doesn’t render checkboxes
-def _badge(v: bool) -> str:
-    if v:   # Missing
-        return f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>"
-    else:   # Present
-        return f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;'>✓</span>"
+    # Convert to HTML badges
+    def _badge(v: bool) -> str:
+        return (f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;"
+                f"border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>"
+                if v else
+                f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;"
+                f"border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;'>✓</span>")
 
-display_df = pd.DataFrame([status_bool], index=[f"Row {pick}"]).astype(object).applymap(_badge)
+    display_df = (
+        pd.DataFrame([status_bool], index=[f"Row {pick}"])
+        .astype(object)
+        .applymap(_badge)
+    )
 
-# Minimal table CSS + render
-table_css = """
-<style>
-.badge-table { border-collapse: separate; border-spacing: 0; width: 100%; }
-.badge-table th, .badge-table td { border: 1px solid #ECECEC; padding: 6px 8px; text-align: center; background: white; }
-.badge-table th { background: #F8F9FA; font-weight: 600; }
-.badge-wrap { overflow-x: auto; border-radius: 10px; }
-</style>
-"""
-html = table_css + "<div class='badge-wrap'>" + display_df.to_html(escape=False, classes='badge-table') + "</div>"
+    # Table CSS + render
+    table_css = """
+    <style>
+    .badge-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+    .badge-table th, .badge-table td { border: 1px solid #ECECEC; padding: 6px 8px; text-align: center; background: white; }
+    .badge-table th { background: #F8F9FA; font-weight: 600; }
+    .badge-wrap { overflow-x: auto; border-radius: 10px; }
+    </style>
+    """
+    html = table_css + "<div class='badge-wrap'>" + display_df.to_html(escape=False, classes='badge-table') + "</div>"
 
-st.markdown(f"**Row {pick} detail** — {row_complete.loc[pick]:.1f}% complete")
-st.markdown(html, unsafe_allow_html=True)
-st.caption("Scroll horizontally to scan all columns.")
+    st.markdown(f"**Row {pick} detail** — {row_complete.loc[pick]:.1f}% complete")
+    st.markdown(html, unsafe_allow_html=True)
+    st.caption("Scroll horizontally to scan all columns.")
 
-# Export flagged rows for follow-up
-csv_bytes = df.loc[below_mask].to_csv(index=True).encode("utf-8")
-st.download_button(
-    "Download rows below threshold (CSV)",
-    data=csv_bytes,
-    file_name="rows_below_threshold.csv"
-)
+    # Download button only if flagged rows exist
+    csv_bytes = df.loc[below_mask].to_csv(index=True).encode("utf-8")
+    st.download_button("Download rows below threshold (CSV)", 
+                       data=csv_bytes, file_name="rows_below_threshold.csv")
 
-# ---- Heatmap sidebar controls (added) ----
+# Heatmap sidebar
 with st.sidebar:
     st.subheader("Heatmap options")
     max_cap = min(len(df), 10000)
@@ -214,7 +220,7 @@ with st.sidebar:
         "The seed fixes which random rows are shown so you can compare runs."
     )
 
-# --- Missingness heatmap ---
+# Missingness heatmap plot
 st.subheader("Missingness heatmap")
 st.markdown(
     "Each square shows whether a **cell is filled or missing**. "
@@ -224,6 +230,23 @@ st.markdown(
 
 # Sample for speed (sample_n and seed come from the sidebar)
 sample = df.sample(n=sample_n, random_state=int(seed))
+
+# Checkbox to hide fully complete rows/columns
+hide_full = st.checkbox("Hide rows/columns that are 100% complete", value=False, help="Removes rows and columns with no missing cells to make patterns easier to see.")
+
+if hide_full:
+    col_miss = sample.isna().mean()          # per-column missing rate
+    row_miss = sample.isna().mean(axis=1)    # per-row missing rate
+
+    cols_keep = col_miss[col_miss > 0].index
+    rows_keep = row_miss[row_miss > 0].index
+
+    sample = sample.loc[rows_keep, cols_keep]
+
+    if sample.shape[0] == 0 or sample.shape[1] == 0:
+        st.info("Nothing to show after filtering — all rows/columns are fully complete. Untick the filter to see everything.")
+        # Skip the heatmap if nothing left to plot
+        st.stop()
 
 # Prepare data
 heat_df = (
