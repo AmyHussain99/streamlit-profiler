@@ -1,4 +1,5 @@
 # pages/01_Completeness.py
+# Import relevant libraries 
 import streamlit as st
 import pandas as pd
 import plotly.express as px

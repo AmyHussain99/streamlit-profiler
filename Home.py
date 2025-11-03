@@ -14,7 +14,8 @@ Welcome to this data-profiling tool.
 Upload a CSV to explore **completeness**, **cardinality**, **distribution**, and **correctness**.
 
 Use the **menu on the left** to switch between checks.  
-💡 Tip: Start by uploading a tidy CSV.
+💡 Tip: Start by uploading a tidy CSV. Please wait for the stickman icon in the top right corner to stop 
+moving to indicate loading is complete before proceeding.
 """
 )
 
@@ -246,7 +247,12 @@ else:
         summary.loc[num_cols, "Min"]  = df[num_cols].min(numeric_only=True)
         summary.loc[num_cols, "Max"]  = df[num_cols].max(numeric_only=True)
 
-    st.markdown(summary.to_html(escape=False), unsafe_allow_html=True) # render summary table with HTMl to allow tooltips
+    # Replace NaNs in the summary table with "Not available" (display only)
+    summary_display = summary.copy()
+    summary_display = summary_display.fillna("Not available*")    
+
+    #st.markdown(summary.to_html(escape=False), unsafe_allow_html=True) # render summary table with HTMl to allow tooltips
+    st.markdown(summary_display.to_html(escape=False), unsafe_allow_html=True)
     st.caption(
         "Note 1: Columns with symbols (%, £, $, commas) are parsed as numbers where possible; "
         "blanks remain as missing values."
@@ -254,6 +260,8 @@ else:
     st.caption(
                 "Note 2: A column is marked as Category when it mostly repeats a small set of short labels "
         "(e.g., Male/Female, UK/US) rather than having lots of unique codes or long text")
+    st.caption(
+        "*'Not available' means the value does not apply or is missing in that column.")
 
 # --- Global CSS (polish) ---
 PRIMARY = "#2E86DE"
