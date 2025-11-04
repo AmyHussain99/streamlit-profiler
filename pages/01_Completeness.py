@@ -144,33 +144,30 @@ flagged_n = len(flagged_idx)
 if flagged_n == 0:
     st.info("No rows fall below the threshold. Increase the threshold or check back after cleaning.")
 else:
-    st.markdown("**Inspect a row** below the threshold to see which cells are present vs missing.**")
-
     # Legend
     legend_html = f"""
     <div style="margin-top:6px;margin-bottom:12px;">
-      <div style="display:inline-flex;align-items:center;gap:14px;background:#F8F9FA;border:1px solid #ECECEC;border-radius:10px;padding:6px 12px;">
+    <div style="display:inline-flex;align-items:center;gap:14px;background:#F8F9FA;border:1px solid #ECECEC;border-radius:10px;padding:6px 12px;">
         <span style="font-weight:600;">Legend:</span>
         <span style="display:inline-flex;align-items:center;gap:6px;">
-          <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;'>✓</span>
-          Present
+        <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;">✓</span>
+        Present
         </span>
         <span style="display:inline-flex;align-items:center;gap:6px;">
-          <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>
-          Missing
+        <span style="display:inline-block;min-width:28px;text-align:center;padding:2px 10px;border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;">✕</span>
+        Missing
         </span>
-      </div>
+    </div>
     </div>
     """
     st.markdown(legend_html, unsafe_allow_html=True)
 
-    # Picker
+    # 1) Choose the row
     pick = st.selectbox("Choose a row to inspect", flagged_idx, index=0)
 
-    # Build a one-row boolean mask (True = Missing, False = Present)
+    # 2) Build the badge table for that row
     status_bool = df.loc[pick].isna()
 
-    # Convert to HTML badges
     def _badge(v: bool) -> str:
         return (f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;"
                 f"border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>"
@@ -184,7 +181,9 @@ else:
         .applymap(_badge)
     )
 
-    # Table CSS + render
+    # 3) Render via components (Streamlit sanitises <table> in markdown now)
+    from streamlit.components.v1 import html as st_html
+
     table_css = """
     <style>
     .badge-table { border-collapse: separate; border-spacing: 0; width: 100%; }
@@ -193,11 +192,12 @@ else:
     .badge-wrap { overflow-x: auto; border-radius: 10px; }
     </style>
     """
-    html = table_css + "<div class='badge-wrap'>" + display_df.to_html(escape=False, classes='badge-table') + "</div>"
+    table_html = display_df.to_html(escape=False, classes="badge-table")
 
     st.markdown(f"**Row {pick} detail** — {row_complete.loc[pick]:.1f}% complete")
-    st.markdown(html, unsafe_allow_html=True)
+    st_html(table_css + f"<div class='badge-wrap'>{table_html}</div>", height=220, scrolling=True)
     st.caption("Scroll horizontally to scan all columns.")
+
 
     # Download button only if flagged rows exist
     csv_bytes = df.loc[below_mask].to_csv(index=True).encode("utf-8")
