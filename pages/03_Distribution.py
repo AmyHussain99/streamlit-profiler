@@ -221,32 +221,49 @@ else:
             fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
-        # Category vs numeric (boxplot)
+        # --- Category vs numeric (boxplot) ---
         st.subheader("Category vs numeric (boxplot)")
         st.markdown(
-            "A **boxplot** shows the spread of a number for each category: the box covers the middle 50%, "
-            "the line is the **median**, and dots mark **outliers**."
+            "A **boxplot** shows the spread of a number for each category: " \
+            "the box covers the middle 50%, " "the line is the **median**, and dots mark **outliers**."
         )
 
-        cat_col = st.selectbox("Categorical", options=cat_cols)
-        num_col = st.selectbox("Numeric", options=num_cols)
-        sample_n = st.slider("Max rows (sample)", 500, 20000, 5000, step=500)
+        # Need at least one of each type
+        if len(cat_cols) == 0 or len(num_cols) == 0:
+            st.info("Need at least one categorical and one numeric column for a box plot.")
+        else:
+            c1, c2 = st.columns(2)
+            with c1:
+                cat_col = st.selectbox("Categorical", options=cat_cols, index=0)
+            with c2:
+                num_col  = st.selectbox("Numeric", options=num_cols, index=0)
 
-        plot_df = df[[cat_col, num_col]].dropna()
-        if len(plot_df) > sample_n:
-            plot_df = plot_df.sample(sample_n, random_state=42)
+            # Extra safety: ensure selected names still exist
+            if (cat_col not in df.columns) or (num_col not in df.columns):
+                st.warning("Selected columns are not in the dataset.")
+            else:
+                sample_n = st.slider("Max rows (sample)", 500, 20000, 5000, step=500)
 
-        fig = px.box(
-            plot_df,
-            x=cat_col,
-            y=num_col,
-            points="outliers",
-            title=f"{num_col} by {cat_col}",
-            color_discrete_sequence=[OKI["sky"]],  # box colour = sky blue
-        )
+                # Build data safely
+                plot_df = df[[cat_col, num_col]].dropna()
+                if plot_df.empty:
+                    st.warning("Nothing to plot: all rows are missing for the selected pair.")
+                elif plot_df[cat_col].nunique() < 2:
+                    st.warning("The selected categorical column has only one category.")
+                elif plot_df[num_col].nunique() < 2:
+                    st.warning("The selected numeric column is constant.")
+                else:
+                    if len(plot_df) > sample_n:
+                        plot_df = plot_df.sample(sample_n, random_state=42)
 
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+                    fig = px.box(
+                        plot_df, x=cat_col, y=num_col, points="outliers",
+                        title=f"{num_col} by {cat_col}",
+                        color_discrete_sequence=[OKI["sky"]],
+                    )
+                    fig.update_layout(xaxis_tickangle=-45)
+                    st.plotly_chart(fig, use_container_width=True)
+
 
 
 
