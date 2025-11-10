@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 import altair as alt
 
+# Page configuration and title
 st.set_page_config(page_title="Completeness", layout="wide")
 st.title("Completeness")
 st.markdown(
@@ -15,14 +16,14 @@ Use it to spot columns with gaps, see how complete each row is, and scan a heatm
 """
 )
 
-# Guard: dataset must exist
+# Guard to keep dataset in place
 if "df" not in st.session_state:
     st.warning("No dataset loaded. Please go to Home and upload a CSV first.")
     st.stop()
 
-df = st.session_state["df"]
+df = st.session_state["df"] # retrieves dataset
 
-# Colour constants
+# Colour constants using OKABE-ITO pallette
 OKABE_ITO = {
     "blue": "#0072B2",
     "sky": "#56B4E9",
@@ -34,8 +35,8 @@ OKABE_ITO = {
     "black": "#000000"
 }
 COLOR_BANDS = {
-    "0% (None)": "#EAEAEA",              # neutral grey for zero missing
-    "Low (≤5%)": OKABE_ITO["sky"],       # 👁️ CB-safe, gentle
+    "0% (None)": "#EAEAEA",              
+    "Low (≤5%)": OKABE_ITO["sky"],         
     "Moderate (5–20%)": OKABE_ITO["orange"],
     "High (20–50%)": OKABE_ITO["vermillion"],
     "Severe (>50%)": OKABE_ITO["purple"],
@@ -47,21 +48,21 @@ def _band(p):
     if p <= 50: return "High (20–50%)"
     return "Severe (>50%)"
 
-# Column-level missingness (Plotly bar)
+# Column-level missingness section
 st.subheader("Missingness by column")
 st.markdown(
     "This chart shows **how much data is missing in each column** as a percentage, so you can quickly spot the worst-affected columns."
 )
 
-# Compute % missing and band it
-miss_pct = df.isna().mean().sort_values(ascending=False) * 100
-miss_tbl = pd.DataFrame({
+# Compute % missing per column
+miss_pct = df.isna().mean().sort_values(ascending=False) * 100 # sort columns from most to least missing
+miss_tbl = pd.DataFrame({ # create table with column name and corresponding missing value percentages
     "Column": miss_pct.index,
     "Missing %": miss_pct.values.round(2)
 })
-miss_tbl["Band"] = miss_tbl["Missing %"].apply(_band)
+miss_tbl["Band"] = miss_tbl["Missing %"].apply(_band) # band the missingness levels
 
-# Plot with Okabe–Ito bands and % labels
+# Plot a plotly bar chart with Okabe–Ito bands and % labels
 fig = px.bar(
     miss_tbl,
     x="Column",
@@ -70,7 +71,7 @@ fig = px.bar(
     color_discrete_map=COLOR_BANDS,
     title="Missing % per column"
 )
-fig.update_traces(texttemplate="%{y:.1f}%", textposition="outside", cliponaxis=False)
+fig.update_traces(texttemplate="%{y:.1f}%", textposition="outside", cliponaxis=False) # add % labesl outside bar
 fig.update_layout(
     xaxis_tickangle=-45,
     uniformtext_minsize=10, uniformtext_mode="hide",
@@ -78,7 +79,7 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True)
 
-# Row completeness
+# Row completeness section
 st.subheader("Row completeness")
 st.markdown(
     "Shows how much of each row is **filled in** (100% = no blanks). "
@@ -87,12 +88,12 @@ st.markdown(
 
 # Palette bits (Okabe–Ito)
 OKI_ORANGE = "#E69F00"   # Missing
-OKI_BLUE   = "#0072B2"   # Present (neutral)
+OKI_BLUE   = "#0072B2"   # Present
 
-row_complete = df.notna().mean(axis=1) * 100
-median_rc = float(row_complete.median())
+row_complete = df.notna().mean(axis=1) * 100 # calculate the proportion of complete values per row
+median_rc = float(row_complete.median())  # find the median completeness across all rows
 
-# Median card (stands out)
+# Median row completness card
 PRIMARY = "#56B4E9"  
 st.markdown(f"""
 <div class="metric-card">
@@ -102,7 +103,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# CSS for the card (once per page is fine)
+# CSS for the card
 st.markdown(f"""
 <style>
 .metric-card {{
@@ -120,7 +121,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# New line / section for the threshold
+# New line / section for the completeness threshold
 st.markdown("**Row completion threshold (%)**")
 st.caption("This will highlight the number of rows below a chosen completeness level "
 "(e.g., 90% will highlight rows with more than 10% of data blank).")
@@ -132,17 +133,17 @@ thr = st.slider(
 )
 
 missing_cutoff = 100 - thr
-below_mask = (row_complete < thr)
+below_mask = (row_complete < thr) # highlights which rows fall below the chosen threshold
 
 st.metric("Rows below threshold", f"{int(below_mask.sum())} / {len(df)}")
 st.caption(f"Rows with less than **{thr}%** cells filled (i.e. more than **{missing_cutoff}%** cells missing) are flagged")
 
- # --- Row inspector (for flagged rows) ---
+ # Row inspector (for flagged incomplete rows)
 flagged_idx = row_complete[below_mask].sort_values().index
 flagged_n = len(flagged_idx)
 
 if flagged_n == 0:
-    st.info("No rows fall below the threshold. Increase the threshold or check back after cleaning.")
+    st.info("No rows fall below the threshold. Increase the threshold to see if any rows appear.")
 else:
     # Legend
     legend_html = f"""
@@ -162,18 +163,18 @@ else:
     """
     st.markdown(legend_html, unsafe_allow_html=True)
 
-    # 1) Choose the row
+    # 1) Choose a row below completnerss threshold
     pick = st.selectbox("Choose a row to inspect", flagged_idx, index=0)
 
-    # 2) Build the badge table for that row
+    # 2) Build the colour-coded table for that row
     status_bool = df.loc[pick].isna()
 
     def _badge(v: bool) -> str:
         return (f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;"
-                f"border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>"
+                f"border-radius:999px;background:{OKI_ORANGE};color:black;font-weight:700;'>✕</span>" # orange for missing
                 if v else
                 f"<span style='display:inline-block;min-width:28px;text-align:center;padding:2px 10px;"
-                f"border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;'>✓</span>")
+                f"border-radius:999px;background:{OKI_BLUE};color:white;font-weight:700;'>✓</span>") # blue for present
 
     display_df = (
         pd.DataFrame([status_bool], index=[f"Row {pick}"])
@@ -181,7 +182,7 @@ else:
         .applymap(_badge)
     )
 
-    # 3) Render via components (Streamlit sanitises <table> in markdown now)
+    # 3) Render table to that row with the ticks/crosses and colours
     from streamlit.components.v1 import html as st_html
 
     table_css = """
@@ -204,7 +205,7 @@ else:
     st.download_button("Download rows below threshold (CSV)", 
                        data=csv_bytes, file_name="rows_below_threshold.csv")
 
-# Heatmap sidebar
+# Heatmap sidebar information
 with st.sidebar:
     st.subheader("Heatmap options")
     max_cap = min(len(df), 10000)
@@ -248,7 +249,7 @@ if hide_full:
         # Skip the heatmap if nothing left to plot
         st.stop()
 
-# Prepare data
+# Prepare data for heatmap plot
 heat_df = (
     sample.isna()
     .reset_index(names="Row")
@@ -261,15 +262,11 @@ col_order = (
     sample.isna().mean().sort_values(ascending=False).index.tolist()
 )
 
-# Order rows by % missing (most → least)
+# Order rows by % missing (descending)
 row_order = sample.isna().mean(axis=1).sort_values(ascending=False).index.tolist()
 
 # Dynamic height
 height = min(600, max(220, 18 * df.shape[1]))
-
-# Okabe–Ito colours
-OKI_BLUE   = "#0072B2"   # Present (neutral)
-OKI_ORANGE = "#E69F00"   # Missing (salient, CB-safe)
 
 heat = (
     alt.Chart(heat_df)
@@ -290,7 +287,7 @@ heat = (
 
 st.altair_chart(heat, use_container_width=True)
 
-# Clear sampling note (uses your actual totals)
+# Tips and texts to add to heatmap
 st.caption(
     f"Use the sidebar on the left to adjust the number of sampled rows "
     f"(dataset has a total of **{len(df)}** rows; heatmap currently shows **{sample_n}**). "
